@@ -1,0 +1,31 @@
+/* Orchestrator stylesheet: imports modular CSS files for better maintainability */
+
+/* Base + global layout */
+@import url('styles-base.css');          /* body, root variables, resets, buttons */
+@import url('styles-layout.css');        /* main layout, sidebars, content area */
+
+/* Header + energy + user info + twitch host bar */
+@import url('styles-header.css');        /* header, task header, energy display, user info */
+
+/* Skills + tasks + tiers */
+@import url('styles-skills.css');        /* skills sidebar, skill header, tier tabs/scenes */
+@import url('styles-tasks.css');         /* task cards, task grid */
+
+/* Inventory + equipment */
+@import url('styles-inventory.css');     /* inventory sidebar, tabs, inventory grid, equipment grid */
+
+/* Overlays + auth + offline popup */
+@import url('styles-overlays.css');      /* generic overlay, auth card, offline catchup */
+
+/* Host console + dropdowns */
+@import url('styles-host-console.css');  /* host console, host dropdown, shared dropdown styles */
+
+/* Tombstones indicating where code used to live in this file */
+/* // removed global resets, root variables, and base layout rules (moved to styles-base.css) */
+/* // removed main flex layout and sidebars (moved to styles-layout.css) */
+/* // removed header, task progress bar, energy display, and user info styles (moved to styles-header.css) */
+/* // removed skills sidebar, skill header, tier tabs, and tier scene styles (moved to styles-skills.css) */
+/* // removed task grid and task card styles (moved to styles-tasks.css) */
+/* // removed inventory sidebar, inventory list, and equipment grid styles (moved to styles-inventory.css) */
+/* // removed overlay, auth overlay, and offline popup styles (moved to styles-overlays.css) */
+/* // removed host console and dropdown styles (moved to styles-host-console.css) */
