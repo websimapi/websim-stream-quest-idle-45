@@ -77,6 +77,9 @@ export function setupHostUI(uiManager) {
     // New: Listen for global database saves to update UI if spectating
     window.addEventListener('sq:player_update', (e) => {
         const p = e.detail;
+        if (!p) return;
+        const now = Date.now();
+
         if (uiManager.spectatingId === p.twitchId) {
              // When first switching to a user, suppress the initial backlog of rewards,
              // then show incremental rewards for subsequent updates.
@@ -96,28 +99,21 @@ export function setupHostUI(uiManager) {
 
             const hasEnergy = getPlayerEnergyCount(p) > 0;
 
-            // If current viewer just ran out of energy, immediately rotate
+            // If current viewer just ran out of energy, schedule a rotation instead of switching immediately
             if (uiManager.spectatingId === p.twitchId && !hasEnergy) {
-                selectNextStreamerTarget(uiManager, network, { preferDifferent: true, allowRandom: true });
+                uiManager.streamerNeedsRotate = true;
                 return;
             }
 
-            // Detect task completion / new action for the currently viewed player
-            if (uiManager.spectatingId === p.twitchId && prevSig && prevSig !== newSig) {
-                // Completed one action; move on to another active viewer
-                selectNextStreamerTarget(uiManager, network, { preferDifferent: true, allowRandom: true });
-                return;
-            }
+            // NOTE: We no longer auto-rotate immediately on task completion for the current viewer.
+            // Rotation is now time-throttled and handled by the periodic streamer interval.
 
             // If some other player just started a task (no task before, task now) and has energy,
-            // treat them as "most recent" and jump to them.
+            // treat them as "most recent command user" and mark them as a pending target.
             const prevTaskId = prevSig.split('|')[0] || '';
             if (p.twitchId !== uiManager.spectatingId && !prevTaskId && taskId && hasEnergy) {
-                uiManager.streamerCurrentTwitchId = p.twitchId;
-                uiManager.streamerLastRotateAt = Date.now();
-                if (typeof uiManager.showPlayerProfile === 'function') {
-                    uiManager.showPlayerProfile(p);
-                }
+                uiManager.streamerPendingTargetId = p.twitchId;
+                uiManager.streamerPendingTargetTs = now;
             }
         }
     });
@@ -296,17 +292,48 @@ export function setupHostUI(uiManager) {
                 return;
             }
 
-            // If someone has an active task, we rely on sq:player_update to jump to them.
-            const anyActiveTask = candidates.some((p) => p.activeTask && p.activeTask.taskId);
-            if (anyActiveTask) {
+            const now = Date.now();
+            const sinceLastRotate = now - (uiManager.streamerLastRotateAt || 0);
+
+            // 1) If we have a pending "most recent command" target, and it's been at least 5s,
+            //    switch to that user.
+            if (uiManager.streamerPendingTargetId && sinceLastRotate >= 5000) {
+                const target = candidates.find(
+                    (p) => p.twitchId === uiManager.streamerPendingTargetId
+                );
+                if (target) {
+                    uiManager.streamerCurrentTwitchId = target.twitchId;
+                    uiManager.streamerLastRotateAt = now;
+                    uiManager.streamerNeedsRotate = false;
+                    if (typeof uiManager.showPlayerProfile === 'function') {
+                        uiManager.showPlayerProfile(target);
+                    }
+                }
+                // Clear pending target regardless, so we don't get stuck
+                uiManager.streamerPendingTargetId = null;
+                uiManager.streamerPendingTargetTs = 0;
                 return;
             }
 
-            // No recent user actions (no active tasks): after 25s, auto-switch to a random active user.
-            const now = Date.now();
-            const elapsed = now - (uiManager.streamerLastRotateAt || 0);
+            // 2) If we need to rotate away from the current viewer (e.g., they ran out of energy),
+            //    do so once 5s have passed since the last switch.
+            if (uiManager.streamerNeedsRotate && sinceLastRotate >= 5000) {
+                uiManager.streamerNeedsRotate = false;
+                selectNextStreamerTarget(uiManager, network, {
+                    preferDifferent: true,
+                    allowRandom: true
+                });
+                return;
+            }
+
+            // 3) If no recent commands triggered a pending target, and no rotation has happened
+            //    for 25s, auto-switch to another active user.
+            const elapsed = sinceLastRotate;
             if (elapsed >= 25000) {
-                selectNextStreamerTarget(uiManager, network, { preferDifferent: true, allowRandom: true });
+                selectNextStreamerTarget(uiManager, network, {
+                    preferDifferent: true,
+                    allowRandom: true
+                });
             }
         }, 3000);
     }
